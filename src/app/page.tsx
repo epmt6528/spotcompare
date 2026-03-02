@@ -1,65 +1,168 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useState } from "react";
+import { Map } from "@/components/Map";
+import { LocationSearch } from "@/components/LocationSearch";
+import { PlaceList } from "@/components/PlaceList";
+import { ComparisonGrid } from "@/components/ComparisonGrid";
+import { DEFAULT_CENTER } from "@/lib/utils";
+import type {
+  Place,
+  PlaceWithReviews,
+  AnalysisResult,
+  ComparisonItem,
+} from "@/lib/types";
 
 export default function Home() {
+  const [center, setCenter] = useState(DEFAULT_CENTER);
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [selectedPlaceIds, setSelectedPlaceIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [comparisonItems, setComparisonItems] = useState<ComparisonItem[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [comparing, setComparing] = useState(false);
+
+  const handleSearch = useCallback(
+    async (lat: number, lng: number) => {
+      setCenter({ lat, lng });
+      setSearching(true);
+      setComparisonItems([]);
+      try {
+        const res = await fetch(
+          `/api/places?action=nearby&lat=${lat}&lng=${lng}`
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Search failed");
+        }
+        const data = await res.json();
+        setPlaces(data);
+        setSelectedPlaceIds(new Set());
+      } finally {
+        setSearching(false);
+      }
+    },
+    []
+  );
+
+  const handleTogglePlace = useCallback((place: Place) => {
+    setSelectedPlaceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(place.place_id)) {
+        next.delete(place.place_id);
+      } else if (next.size < 4) {
+        next.add(place.place_id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCompare = useCallback(async () => {
+    const selected = places.filter((p) => selectedPlaceIds.has(p.place_id));
+    if (selected.length === 0) return;
+    setComparing(true);
+    const items: ComparisonItem[] = selected.map((p) => ({
+      place: { ...p, reviews: [] },
+      analysis: null,
+      loading: true,
+    }));
+    setComparisonItems(items);
+
+    const results: ComparisonItem[] = [];
+    for (let i = 0; i < selected.length; i++) {
+      const place = selected[i];
+      try {
+        const detailsRes = await fetch(
+          `/api/places?action=details&place_id=${encodeURIComponent(place.place_id)}`
+        );
+        if (!detailsRes.ok) {
+          results.push({
+            place: { ...place, reviews: [] },
+            analysis: null,
+            loading: false,
+          });
+          continue;
+        }
+        const placeWithReviews: PlaceWithReviews = await detailsRes.json();
+
+        const reviews = placeWithReviews.reviews ?? [];
+        let analysis: AnalysisResult = { pros: [], cons: [] };
+        if (reviews.length > 0) {
+          const analyzeRes = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              placeName: placeWithReviews.name,
+              reviews: reviews.map((r) => ({ text: r.text, rating: r.rating })),
+            }),
+          });
+          if (analyzeRes.ok) {
+            analysis = await analyzeRes.json();
+          }
+        }
+
+        results.push({
+          place: placeWithReviews,
+          analysis,
+          loading: false,
+        });
+      } catch {
+        results.push({
+          place: { ...place, reviews: [] },
+          analysis: null,
+          loading: false,
+        });
+      }
+      setComparisonItems([...results]);
+    }
+    setComparing(false);
+  }, [places, selectedPlaceIds]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
+      <header className="border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+          SpotCompare
+        </h1>
+        <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
+          Search nearby restaurants, select up to 4, and compare pros and cons.
+        </p>
+        <div className="mt-3">
+          <LocationSearch onSearch={handleSearch} disabled={searching} />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      </header>
+
+      <div className="flex flex-1 flex-col gap-4 p-4 lg:flex-row">
+        <section className="flex flex-col gap-3 lg:w-1/3">
+          <div className="h-[280px] min-h-[280px] lg:h-[360px]">
+            <Map
+              center={center}
+              places={places}
+              selectedPlaceIds={selectedPlaceIds}
+              onPlaceSelect={handleTogglePlace}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+          </div>
+          <PlaceList
+            places={places}
+            selectedPlaceIds={selectedPlaceIds}
+            onTogglePlace={handleTogglePlace}
+            onCompare={handleCompare}
+            comparing={comparing}
+          />
+        </section>
+
+        <section className="flex-1">
+          {comparisonItems.length > 0 && (
+            <>
+              <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                Comparison
+              </h2>
+              <ComparisonGrid items={comparisonItems} />
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
