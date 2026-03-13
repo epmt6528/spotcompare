@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import type { AnalysisResult } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = process.env.OPENAI_API_KEY;
   if (!key) {
     return NextResponse.json(
-      { error: "Anthropic API key not configured" },
+      { error: "OpenAI API key not configured" },
       { status: 500 }
     );
   }
@@ -46,17 +46,21 @@ Be concise; 3-6 items each. Base only on review content. If a review has no clea
 Reviews:
 ${reviewTexts.map((t, i) => `[${i + 1}] ${t}`).join("\n\n")}`;
 
-  const client = new Anthropic({ apiKey: key });
-  const message = await client.messages.create({
-    max_tokens: 1024,
-    model: "claude-sonnet-4-20250514",
-    messages: [{ role: "user", content: prompt }],
-  });
+  const client = new OpenAI({ apiKey: key });
+  let completion;
+  try {
+    completion = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
+  } catch (err: unknown) {
+    const status = err instanceof OpenAI.APIError ? err.status ?? 500 : 500;
+    const msg = err instanceof Error ? err.message : "OpenAI API error";
+    return NextResponse.json({ error: msg }, { status });
+  }
 
-  let text =
-    message.content[0].type === "text"
-      ? message.content[0].text
-      : "";
+  let text = completion.choices[0]?.message?.content ?? "";
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) text = jsonMatch[1].trim();
   let result: AnalysisResult;
