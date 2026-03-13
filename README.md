@@ -6,7 +6,7 @@ A web app that lets you search for nearby restaurants on a Google Map, select up
 
 - **Node.js** 18+ and npm
 - **Google Cloud** project with billing enabled
-- **Anthropic** API key
+- **OpenAI** API key
 
 ## Setup
 
@@ -30,7 +30,7 @@ Edit `.env.local`:
 |----------|-------------|
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps JavaScript API key (used for the map and can be used for Places/Geocoding). Restrict by HTTP referrer (e.g. `localhost:*`, your domain). |
 | `GOOGLE_PLACES_API_KEY` | Optional. If set, used for server-side Places and Geocoding; otherwise the app uses `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. |
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude (server-side only). |
+| `OPENAI_API_KEY` | OpenAI API key for GPT (server-side only). |
 
 ### 3. Google Cloud configuration
 
@@ -66,7 +66,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Next.js** (App Router) with **TypeScript**
 - **Tailwind CSS** for styling
 - **@react-google-maps/api** for the map and markers
-- **@anthropic-ai/sdk** for Claude-based review analysis
+- **openai** SDK for GPT-based review analysis
 
 ## Project structure
 
