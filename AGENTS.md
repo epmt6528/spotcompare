@@ -27,3 +27,19 @@ See `README.md` → **Scripts** section. Quick reference:
 - No automated test suite exists (`npm test` is not configured). Validation is done via lint + build + manual testing.
 - The app is fully stateless; all data comes from Google/Anthropic APIs at request time.
 - Node 18+ is required; the VM ships with Node 22 which works fine.
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (client-side) should have **HTTP referer** restrictions. `GOOGLE_PLACES_API_KEY` (server-side) must **not** have referer restrictions — use "None" or IP-based restrictions, otherwise Geocoding/Places calls fail with "API keys with referer restrictions cannot be used with this API."
+- The Google Cloud project must have the **legacy** "Places API" enabled (not "Places API (New)"). The code uses legacy endpoints (`/maps/api/place/nearbysearch/json`, `/maps/api/place/details/json`).
+- `.env.local` is gitignored. On Cloud Agent VMs, write it from environment secrets at startup before running `npm run dev`.
+
+### Starting the dev server
+
+Write `.env.local` from secrets, then `npm run dev`. The server runs on port 3000. Example:
+
+```bash
+cat > .env.local <<EOF
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+GOOGLE_PLACES_API_KEY=${GOOGLE_PLACES_API_KEY}
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+EOF
+npm run dev
+```
